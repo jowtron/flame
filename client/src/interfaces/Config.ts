@@ -34,10 +34,14 @@ export interface Config {
   weatherData: WeatherData;
   hideDate: boolean;
   weatherMode: 'geoip' | 'fixed';
+  weatherWidgetIcon?: number;
   showExtraWeatherColumn: boolean;
   extraWeatherTop: string;
   extraWeatherBottom: string;
   collapseCategories?: boolean;
   categoryCollapseIcon?: string;
   categoryCollapseIconHover?: string;
+  forecastEnable?: boolean;
+  forecastDays: number;
+  forecastCache: boolean;
 }

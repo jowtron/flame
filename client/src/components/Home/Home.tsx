@@ -1,3 +1,4 @@
+import axios from 'axios';
 import { useState, useEffect, useMemo, Fragment } from 'react';
 import { Link } from 'react-router-dom';
 
@@ -9,7 +10,7 @@ import { bindActionCreators } from 'redux';
 import { actionCreators } from '../../store';
 
 // Typescript
-import { App, Category } from '../../interfaces';
+import { App, Category, ForecastDay, ApiResponse } from '../../interfaces';
 
 // UI
 import { Icon, Container, SectionHeadline, Spinner, Message } from '../UI';
@@ -17,6 +18,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 // CSS
 import classes from './Home.module.css';
+import { ForecastModal } from '../Widgets/ForecastModal/ForecastModal';
 
 // Components
 import { AppGrid } from '../Apps/AppGrid/AppGrid';
@@ -27,9 +29,23 @@ import { Header } from './Header/Header';
 // Utils
 import { escapeRegex, applyAuth } from '../../utility';
 
-const CollapseToggle = ({ isHovered, config }: { isHovered: boolean; config: State['config']['config']; }) => {
-  const iconName = isHovered ? config.categoryCollapseIconHover || 'mdiChevronRightCircleOutline' : config.categoryCollapseIcon || 'mdiChevronRight';
-  return <Icon icon={iconName} color={isHovered ? 'var(--color-primary)' : 'var(--color-accent)'} className={classes.SmallIcon} />;
+const CollapseToggle = ({
+  isHovered,
+  config,
+}: {
+  isHovered: boolean;
+  config: State['config']['config'];
+}) => {
+  const iconName = isHovered
+    ? config.categoryCollapseIconHover || 'mdiChevronRightCircleOutline'
+    : config.categoryCollapseIcon || 'mdiChevronRight';
+  return (
+    <Icon
+      icon={iconName}
+      color={isHovered ? 'var(--color-primary)' : 'var(--color-accent)'}
+      className={classes.SmallIcon}
+    />
+  );
 };
 
 const LOCAL_APP_COLLAPSE_KEY = 'flame:collapse:apps';
@@ -51,17 +67,33 @@ const saveLocalAppCollapse = (state: Record<number, boolean>) => {
 export const Home = (): JSX.Element => {
   const {
     apps: { apps, totalApps },
-    categories: { categories, totalCategories: totalBookmarkCategories, loading: categoriesLoading },
+    categories: {
+      categories,
+      totalCategories: totalBookmarkCategories,
+      loading: categoriesLoading,
+    },
     config: { config },
     auth: { isAuthenticated },
   } = useSelector((state: State) => state);
 
-  const dispatch = useDispatch();
-  const { updateCategoryCollapseState } = bindActionCreators(actionCreators, dispatch);
+  // once per render
+  const forecastEnabled = config?.forecastEnable !== false;
 
+  const dispatch = useDispatch();
+  const { updateCategoryCollapseState, createNotification } =
+    bindActionCreators(actionCreators, dispatch);
+
+  // forecast
+  const [isForecastOpen, setIsForecastOpen] = useState(false);
+  const [forecastData, setForecastData] = useState<ForecastDay[] | null>(null);
+  const [isForecastLoading, setIsForecastLoading] = useState(false);
+
+  // Local search query
   const [localSearch, setLocalSearch] = useState<null | string>(null);
   const [appSearchResult, setAppSearchResult] = useState<null | App[]>(null);
-  const [bookmarkSearchResult, setBookmarkSearchResult] = useState<null | Category[]>(null);
+  const [bookmarkSearchResult, setBookmarkSearchResult] = useState<
+    null | Category[]
+  >(null);
 
   useEffect(() => {
     dispatch(fetchHomepageData() as any);
@@ -69,11 +101,19 @@ export const Home = (): JSX.Element => {
 
   // --- START OF FINALIZED DISPLAY LOGIC ---
 
-  const publiclyVisibleApps = useMemo(() => apps.filter(app => app.isPublic && app.isPinned), [apps]);
-  const publiclyVisiblePinnedBookmarkCategories = useMemo(() => categories.filter(c => c.isPinned && c.isPublic && c.section === 'bookmarks'), [categories]);
+  const publiclyVisibleApps = useMemo(
+    () => apps.filter((app) => app.isPublic && app.isPinned),
+    [apps]
+  );
+  const publiclyVisiblePinnedBookmarkCategories = useMemo(
+    () =>
+      categories.filter(
+        (c) => c.isPinned && c.isPublic && c.section === 'bookmarks'
+      ),
+    [categories]
+  );
 
   const appsToDisplay = isAuthenticated ? apps : publiclyVisibleApps;
-//  const appCategories = useMemo(() => (categories || []).filter(c => c.section === 'apps' && (isAuthenticated || c.isPublic)), [categories, isAuthenticated]);
 
   const appCategories = useMemo(
     () =>
@@ -86,23 +126,47 @@ export const Home = (): JSX.Element => {
       }),
     [categories, isAuthenticated]
   );
-  
-  const populatedAppCategories = useMemo(() => appCategories.filter(cat => appsToDisplay.some(app => app.categoryId === cat.id)), [appCategories, appsToDisplay]);
-  const hasUncategorizedApps = useMemo(() => appsToDisplay.some(app => app.categoryId == null), [appsToDisplay]);
-  const totalAppGroups = populatedAppCategories.length + (hasUncategorizedApps ? 1 : 0);
 
-  const shouldShowAppsSection = !config.hideApps && (isAuthenticated || publiclyVisibleApps.length > 0 || (totalApps === 0 && !isAuthenticated));
-  const shouldShowBookmarksSection = !config.hideCategories && (isAuthenticated || publiclyVisiblePinnedBookmarkCategories.length > 0 || (totalBookmarkCategories === 0 && !isAuthenticated));
+  const populatedAppCategories = useMemo(
+    () =>
+      appCategories.filter((cat) =>
+        appsToDisplay.some((app) => app.categoryId === cat.id)
+      ),
+    [appCategories, appsToDisplay]
+  );
+  const hasUncategorizedApps = useMemo(
+    () => appsToDisplay.some((app) => app.categoryId == null),
+    [appsToDisplay]
+  );
+  const totalAppGroups =
+    populatedAppCategories.length + (hasUncategorizedApps ? 1 : 0);
 
-  const showCombinedEmptyMessage = !isAuthenticated &&
-    !config.hideApps && !config.hideCategories &&
-    totalApps > 0 && publiclyVisibleApps.length === 0 &&
-    totalBookmarkCategories > 0 && publiclyVisiblePinnedBookmarkCategories.length === 0;
+  const shouldShowAppsSection =
+    !config.hideApps &&
+    (isAuthenticated ||
+      publiclyVisibleApps.length > 0 ||
+      (totalApps === 0 && !isAuthenticated));
+  const shouldShowBookmarksSection =
+    !config.hideCategories &&
+    (isAuthenticated ||
+      publiclyVisiblePinnedBookmarkCategories.length > 0 ||
+      (totalBookmarkCategories === 0 && !isAuthenticated));
+
+  const showCombinedEmptyMessage =
+    !isAuthenticated &&
+    !config.hideApps &&
+    !config.hideCategories &&
+    totalApps > 0 &&
+    publiclyVisibleApps.length === 0 &&
+    totalBookmarkCategories > 0 &&
+    publiclyVisiblePinnedBookmarkCategories.length === 0;
 
   // --- END OF FINALIZED DISPLAY LOGIC ---
 
   const [didInitCollapse, setDidInitCollapse] = useState(false);
-  const [collapseState, setCollapseState] = useState<Record<number, boolean>>({});
+  const [collapseState, setCollapseState] = useState<Record<number, boolean>>(
+    {}
+  );
   const [hoveredId, setHoveredId] = useState<number | null>(null);
 
   useEffect(() => {
@@ -141,14 +205,69 @@ export const Home = (): JSX.Element => {
     }
   };
 
+  // click2forecast
+  const handleWidgetClick = async () => {
+    // Hard stop if disabled
+    if (!forecastEnabled) return;
+
+    if (!config.WEATHER_API_KEY) {
+      createNotification({
+        title: 'Info',
+        message: 'Weather API key is not configured in settings.',
+      });
+      return;
+    }
+
+    setIsForecastOpen(true);
+    setIsForecastLoading(true);
+
+    try {
+      const params = {
+        days: config.forecastDays,
+        useCache: config.forecastCache,
+      };
+      const res = await axios.get<ApiResponse<ForecastDay[]>>(
+        '/api/weather/forecast',
+        { params }
+      );
+      setForecastData(res.data.data);
+    } catch (err: any) {
+      createNotification({
+        title: 'Error',
+        message: err.response?.data?.error || 'Failed to fetch forecast',
+      });
+      setIsForecastOpen(false); // Close modal on error
+    } finally {
+      setIsForecastLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (localSearch) {
       const re = new RegExp(escapeRegex(localSearch), 'i');
-      setAppSearchResult(appsToDisplay.filter(({ name, description }) => re.test(`${name} ${description}`)));
+      setAppSearchResult(
+        appsToDisplay.filter(({ name, description }) =>
+          re.test(`${name} ${description}`)
+        )
+      );
+
       const base: Category | undefined = categories[0];
-      const searchCategory: Category = base ? { ...base } : ({ id: 0, name: '', isPinned: false, isPublic: true, orderId: 0 } as any);
+      const searchCategory: Category = base
+        ? { ...base }
+        : ({
+            id: 0,
+            name: '',
+            isPinned: false,
+            isPublic: true,
+            orderId: 0,
+          } as any);
+
       searchCategory.name = 'Search Results';
-      searchCategory.bookmarks = (categories ?? []).filter(c => isAuthenticated || c.isPublic).flatMap(({ bookmarks }) => bookmarks ?? []).filter(b => (isAuthenticated || b.isPublic) && re.test(b.name));
+      searchCategory.bookmarks = (categories ?? [])
+        .filter((c) => isAuthenticated || c.isPublic)
+        .flatMap(({ bookmarks }) => bookmarks ?? [])
+        .filter((b) => (isAuthenticated || b.isPublic) && re.test(b.name));
+
       setBookmarkSearchResult([searchCategory]);
     } else {
       setAppSearchResult(null);
@@ -158,62 +277,134 @@ export const Home = (): JSX.Element => {
 
   return (
     <Container>
-      {!config.hideSearch && <SearchBar setLocalSearch={setLocalSearch} appSearchResult={appSearchResult} bookmarkSearchResult={bookmarkSearchResult} />}
-      <Header />
+      {/* modal => only mount when forecast is enabled */}
+      {forecastEnabled && isForecastOpen && (
+        <ForecastModal
+          data={forecastData}
+          isLoading={isForecastLoading}
+          onClose={() => setIsForecastOpen(false)}
+        />
+      )}
+
+      {!config.hideSearch ? (
+        <SearchBar
+          setLocalSearch={setLocalSearch}
+          appSearchResult={appSearchResult}
+          bookmarkSearchResult={bookmarkSearchResult}
+        />
+      ) : (
+        <div></div>
+      )}
+
+      {/* Pass the click handler only when enabled. Widget renders inert otherwise. */}
+      <Header onWidgetClick={forecastEnabled ? handleWidgetClick : undefined} />
 
       {!isAuthenticated && !totalApps && !totalBookmarkCategories ? (
-        <Message>Welcome to Flame! Go to <Link to="/settings/app">/settings</Link> to get started.</Message>
+        <Message>
+          Welcome to Flame! Go to <Link to="/settings/app">/settings</Link> to
+          get started.
+        </Message>
       ) : null}
 
       {showCombinedEmptyMessage && (
-        <Message>Log in to get access to your Applications and Bookmarks. Go to <Link to="/settings">/settings</Link> to log in.</Message>
+        <Message>
+          Log in to get access to your Applications and Bookmarks. Go to{' '}
+          <Link to="/settings">/settings</Link> to log in.
+        </Message>
       )}
 
       {/* Applications Section */}
       {!showCombinedEmptyMessage && shouldShowAppsSection && (
         <Fragment>
           <SectionHeadline title="Applications" link="/applications" />
-          {categoriesLoading ? <Spinner /> : (
-            appSearchResult ? <AppGrid apps={appSearchResult} searching={!!localSearch} /> : (
-              !isAuthenticated && totalApps === 0 ? <Message>You don't have any applications. You can add one from the <Link to="/applications">/applications</Link> menu.</Message> : (
-                totalAppGroups <= 1 ? <AppGrid apps={appsToDisplay} searching={!!localSearch} /> : (
-                  <>
-                    {populatedAppCategories.slice().sort((a, b) => (a.orderId ?? 0) - (b.orderId ?? 0)).map((cat) => {
-                      const list = appsToDisplay.filter((a) => a.categoryId === cat.id);
-                      if (list.length === 0) return null;
-                      const isCollapsed = collapseState[cat.id] ?? false;
-                      const isCurrentlyHovered = hoveredId === cat.id;
-                      const buttonClasses = `${classes.toggleButton} ${!isCollapsed ? classes.isExpanded : ''}`;
-                      return (
-                        <div key={cat.id} style={{ marginBottom: '2rem' }}>
-                          <h2 className={classes.categoryTitle}>
-                            {config.collapseCategories !== false && (
-                              <button onClick={() => toggleCollapsed(cat.id)} onMouseEnter={() => setHoveredId(cat.id)} onMouseLeave={() => setHoveredId(null)} className={buttonClasses}>
-                                <CollapseToggle isHovered={isCurrentlyHovered} config={config} />
-                              </button>
-                            )}
-                            {cat.name}
-                          </h2>
-                          <AnimatePresence>
-                            {!isCollapsed && (
-                              <motion.div style={{ overflow: 'hidden' }} key="app-grid-content" initial="hidden" animate="visible" exit="hidden" variants={{ visible: { opacity: 1, height: 'auto' }, hidden: { opacity: 0, height: 0 }, }} transition={{ duration: 0.5, ease: 'easeInOut' }}>
-                                <AppGrid apps={list} searching={!!localSearch} />
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-                        </div>
-                      );
-                    })}
-                    {hasUncategorizedApps && (
-                      <div style={{ marginBottom: '2rem' }}>
-                        <h2 style={{ margin: '0 0 0.5rem', fontSize: '16px', fontWeight: 400, color: 'var(--color-accent)', textTransform: 'uppercase' }}>Uncategorized</h2>
-                        <AppGrid apps={appsToDisplay.filter((a) => a.categoryId == null)} searching={!!localSearch} />
-                      </div>
-                    )}
-                  </>
-                )
-              )
-            )
+          {categoriesLoading ? (
+            <Spinner />
+          ) : appSearchResult ? (
+            <AppGrid apps={appSearchResult} searching={!!localSearch} />
+          ) : !isAuthenticated && totalApps === 0 ? (
+            <Message>
+              You don&apos;t have any applications. You can add one from the{' '}
+              <Link to="/applications">/applications</Link> menu.
+            </Message>
+          ) : totalAppGroups <= 1 ? (
+            <AppGrid apps={appsToDisplay} searching={!!localSearch} />
+          ) : (
+            <>
+              {populatedAppCategories
+                .slice()
+                .sort((a, b) => (a.orderId ?? 0) - (b.orderId ?? 0))
+                .map((cat) => {
+                  const list = appsToDisplay.filter(
+                    (a) => a.categoryId === cat.id
+                  );
+                  if (list.length === 0) return null;
+                  const isCollapsed = collapseState[cat.id] ?? false;
+                  const isCurrentlyHovered = hoveredId === cat.id;
+                  const buttonClasses = `${classes.toggleButton} ${
+                    !isCollapsed ? classes.isExpanded : ''
+                  }`;
+                  return (
+                    <div key={cat.id} style={{ marginBottom: '2rem' }}>
+                      <h2 className={classes.categoryTitle}>
+                        {config.collapseCategories !== false && (
+                          <button
+                            onClick={() => toggleCollapsed(cat.id)}
+                            onMouseEnter={() => setHoveredId(cat.id)}
+                            onMouseLeave={() => setHoveredId(null)}
+                            className={buttonClasses}
+                          >
+                            <CollapseToggle
+                              isHovered={isCurrentlyHovered}
+                              config={config}
+                            />
+                          </button>
+                        )}
+                        {cat.name}
+                      </h2>
+                      <AnimatePresence>
+                        {!isCollapsed && (
+                          <motion.div
+                            style={{ overflow: 'hidden' }}
+                            key="app-grid-content"
+                            initial="hidden"
+                            animate="visible"
+                            exit="hidden"
+                            variants={{
+                              visible: { opacity: 1, height: 'auto' },
+                              hidden: { opacity: 0, height: 0 },
+                            }}
+                            transition={{ duration: 0.5, ease: 'easeInOut' }}
+                          >
+                            <AppGrid
+                              apps={list}
+                              searching={!!localSearch}
+                            />
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  );
+                })}
+              {hasUncategorizedApps && (
+                <div style={{ marginBottom: '2rem' }}>
+                  <h2
+                    style={{
+                      margin: '0 0 0.5rem',
+                      fontSize: '16px',
+                      fontWeight: 400,
+                      color: 'var(--color-accent)',
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    Uncategorized
+                  </h2>
+                  <AppGrid
+                    apps={appsToDisplay.filter((a) => a.categoryId == null)}
+                    searching={!!localSearch}
+                  />
+                </div>
+              )}
+            </>
           )}
           <div className={classes.HomeSpace}></div>
         </Fragment>
@@ -223,59 +414,64 @@ export const Home = (): JSX.Element => {
       {!showCombinedEmptyMessage && shouldShowBookmarksSection && (
         <Fragment>
           <SectionHeadline title="Bookmarks" link="/bookmarks" />
-          {categoriesLoading ? <Spinner /> : (() => {
-            if (bookmarkSearchResult) {
-              return (
-                <BookmarkGrid
-                  categories={bookmarkSearchResult}
-                  searching={true}
-                  fromHomepage={true}
-                />
-              );
-            }
-      
-            const pinnedAndVisibleCategories = (categories || []).filter(
-              ({ section, isPinned, isPublic, bookmarks }) => {
-                if (section !== 'bookmarks') return false;
-                const pinned = !!isPinned;
-                const visible = isAuthenticated ? true : !!isPublic;
-                const hasBookmarks = (bookmarks?.length ?? 0) > 0;
-                return pinned && visible && hasBookmarks;
+          {categoriesLoading ? (
+            <Spinner />
+          ) : (() => {
+              if (bookmarkSearchResult) {
+                return (
+                  <BookmarkGrid
+                    categories={bookmarkSearchResult}
+                    searching={true}
+                    fromHomepage={true}
+                  />
+                );
               }
-            );
-      
-            if (pinnedAndVisibleCategories.length > 0) {
-              return (
-                <BookmarkGrid
-                  categories={pinnedAndVisibleCategories}
-                  searching={false}
-                  fromHomepage={true}
-                />
+
+              const pinnedAndVisibleCategories = (categories || []).filter(
+                ({ section, isPinned, isPublic, bookmarks }) => {
+                  if (section !== 'bookmarks') return false;
+                  const pinned = !!isPinned;
+                  const visible = isAuthenticated ? true : !!isPublic;
+                  const hasBookmarks = (bookmarks?.length ?? 0) > 0;
+                  return pinned && visible && hasBookmarks;
+                }
               );
-            }
-      
-            if (totalBookmarkCategories > 0 && !isAuthenticated) {
+
+              if (pinnedAndVisibleCategories.length > 0) {
+                return (
+                  <BookmarkGrid
+                    categories={pinnedAndVisibleCategories}
+                    searching={false}
+                    fromHomepage={true}
+                  />
+                );
+              }
+
+              if (totalBookmarkCategories > 0 && !isAuthenticated) {
+                return (
+                  <Message>
+                    There are no pinned public categories. You can pin them from
+                    the <Link to="/bookmarks">/bookmarks</Link> menu when logged in.
+                  </Message>
+                );
+              }
+
+              if (totalBookmarkCategories > 0 && isAuthenticated) {
+                return (
+                  <Message>
+                    There are no pinned categories. You can pin them from the{' '}
+                    <Link to="/bookmarks">/bookmarks</Link> menu.
+                  </Message>
+                );
+              }
+
               return (
                 <Message>
-                  There are no pinned public categories. You can pin them from the <Link to="/bookmarks">/bookmarks</Link> menu when logged in.
+                  You don&apos;t have any bookmarks. You can add a new one from
+                  the <Link to="/bookmarks">/bookmarks</Link> menu.
                 </Message>
               );
-            }
-      
-            if (totalBookmarkCategories > 0 && isAuthenticated) {
-              return (
-                <Message>
-                  There are no pinned categories. You can pin them from the <Link to="/bookmarks">/bookmarks</Link> menu.
-                </Message>
-              );
-            }
-      
-            return (
-              <Message>
-                You don&apos;t have any bookmarks. You can add a new one from the <Link to="/bookmarks">/bookmarks</Link> menu.
-              </Message>
-            );
-          })()}
+            })()}
         </Fragment>
       )}
 
