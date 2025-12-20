@@ -1,3 +1,8 @@
+### v0.05 (2025-12-19)
+- Weather forecast when clicking on widget from homepage of flame
+- Updated settings to include weather forecast options
+- FIX: resolved bug where edit UI did not update when reordering applications within a category
+
 ### v0.04 (2025-09-14)
 - Updated prettier v2.8.8 => 3.6.2
 - Updated skycons-ts v0.2.0 => 1.0.0 (animated weather icons)
