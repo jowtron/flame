@@ -1,4 +1,4 @@
-import { Fragment, useState, useEffect, useMemo } from 'react';
+import { Fragment, useState, useEffect, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 
 // @dnd-kit imports
@@ -66,7 +66,7 @@ const SortableAppRow = ({
     border: isDragging ? '1px solid var(--color-accent)' : 'none',
     borderRadius: '4px',
   };
-  
+
   const entityForActions = {
     ...app,
     isPinned: !!app.isPinned,
@@ -109,36 +109,35 @@ export const AppTable = ({
     apps: { apps: allApps },
     config: { config },
   } = useSelector((state: State) => state);
-  
+
   const appsToShow = useMemo(() => {
-    const filtered = allApps.filter(app => {
-      if (category.id === -1) {
-        return app.categoryId === null;
-      }
+    const filtered = allApps.filter((app) => {
+      if (category.id === -1) return app.categoryId === null;
       return app.categoryId === category.id;
     });
-    return filtered.sort((a, b) => a.orderId - b.orderId);
+    return filtered.slice().sort((a, b) => (a.orderId ?? 0) - (b.orderId ?? 0));
   }, [allApps, category.id]);
 
   const dispatch = useDispatch();
-  const { pinApp, deleteApp, reorderApps, createNotification, updateApp } =
+  const { pinApp, deleteApp, reorderApps, createNotification, updateApp, fetchHomepageData, } =
     bindActionCreators(actionCreators, dispatch);
 
   const [localApps, setLocalApps] = useState<App[]>([]);
+  const syncingFromStore = useRef(false);
+  const [saving, setSaving] = useState(false);
 
   // Update useEffect to use the filtered list
   useEffect(() => {
+    if (syncingFromStore.current) return;
     setLocalApps(appsToShow);
   }, [appsToShow]);
-  
+
   const sensors = useSensors(
     useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  const handleDragEnd = (event: DragEndEvent) => {
+  const handleDragEnd = async (event: DragEndEvent) => {
     if (config.useOrdering !== 'orderId') {
       createNotification({
         title: 'Error',
@@ -154,10 +153,31 @@ export const AppTable = ({
 
     const oldIndex = localApps.findIndex((a) => a.id === active.id);
     const newIndex = localApps.findIndex((a) => a.id === over.id);
-    const reordered = arrayMove(localApps, oldIndex, newIndex);
+    if (oldIndex < 0 || newIndex < 0) return;
 
+    const reordered = arrayMove(localApps, oldIndex, newIndex);
+    syncingFromStore.current = true;
     setLocalApps(reordered);
-    reorderApps(reordered);
+
+    try {
+      setSaving(true);
+      const maybePromise = reorderApps(reordered);
+      if (maybePromise && typeof (maybePromise as any).then === 'function') {
+        await (maybePromise as any);
+      }
+
+      await fetchHomepageData();
+    } catch (err) {
+      console.error('Failed to persist app order', err);
+      createNotification({
+        title: 'Error',
+        message: 'Could not save new application order.',
+      });
+      setLocalApps(appsToShow);
+    } finally {
+      setSaving(false);
+      syncingFromStore.current = false;
+    }
   };
 
   // Action handlers
@@ -174,42 +194,47 @@ export const AppTable = ({
   };
 
   const pinAppHandler = (id: number) => {
-    // UI 1st
-    setLocalApps(currentApps =>
-      currentApps.map(app =>
+    // UI first
+    setLocalApps((current) =>
+      current.map((app) =>
         app.id === id ? { ...app, isPinned: !app.isPinned } : app
       )
     );
-
-    const appToPin = localApps.find(app => app.id === id);
-    if (appToPin) {
-      // Redux action => app object
-      pinApp(appToPin);
-    }
+    const appToPin = localApps.find((a) => a.id === id);
+    if (appToPin) pinApp(appToPin);
   };
 
   const changeAppVisibilityHandler = (id: number) => {
-    setLocalApps(currentApps => {
-      const appToUpdate = currentApps.find(app => app.id === id);
-      if (!appToUpdate) return currentApps;
-
-      const updatedApp = { ...appToUpdate, isPublic: !appToUpdate.isPublic };
-      updateApp(id, updatedApp);
-
-      return currentApps.map(app => (app.id === id ? updatedApp : app));
+    setLocalApps((current) => {
+      const appToUpdate = current.find((a) => a.id === id);
+      if (!appToUpdate) return current;
+      const updated = { ...appToUpdate, isPublic: !appToUpdate.isPublic };
+      updateApp(id, updated);
+      return current.map((a) => (a.id === id ? updated : a));
     });
   };
 
   return (
     <Fragment>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
-        <h2 style={{ color: 'var(--color-primary)' }}>Editing: {category.name}</h2>
-        <ActionButton
-          name="Done Editing"
-          icon="mdiPencilOff"
-          handler={onFinishEditing}
-        />
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: '1rem',
+        }}
+      >
+        <h2 style={{ color: 'var(--color-primary)' }}>
+          Editing: {category.id === -1 ? 'Uncategorized' : category.name}
+          {saving ? (
+            <span style={{ marginLeft: 12, color: 'var(--color-accent)', fontSize: 12 }}>
+              Saving…
+            </span>
+          ) : null}
+        </h2>
+        <ActionButton name="Done Editing" icon="mdiPencilOff" handler={onFinishEditing} />
       </div>
+
       <Message isPrimary={false}>
         {config.useOrdering === 'orderId' ? (
           <p>You can drag and drop single rows to reorder applications</p>
@@ -238,7 +263,7 @@ export const AppTable = ({
           </thead>
           <tbody>
             <SortableContext
-              items={localApps.map(a => a.id)}
+              items={localApps.map((a) => a.id)}
               strategy={verticalListSortingStrategy}
             >
               {localApps.map((app: App) => (

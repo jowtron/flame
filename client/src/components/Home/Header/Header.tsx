@@ -20,7 +20,7 @@ interface HeaderProps {
   forecastEnable: boolean;
 }
 
-export const Header = ({ onWidgetClick, forecastEnable }: HeaderProps): JSX.Element => {
+export const Header = ({ onWidgetClick }: HeaderProps): JSX.Element => {
   const { hideHeader, hideDate, showTime } = useSelector(
     (state: State) => state.config.config
   );
@@ -29,20 +29,13 @@ export const Header = ({ onWidgetClick, forecastEnable }: HeaderProps): JSX.Elem
   const [greeting, setGreeting] = useState<string>(greeter());
 
   useEffect(() => {
-    let dateTimeInterval: NodeJS.Timeout;
-
-    dateTimeInterval = setInterval(() => {
+    const dateTimeInterval = setInterval(() => {
       setDateTime(getDateTime());
       setGreeting(greeter());
     }, 1000);
 
     return () => window.clearInterval(dateTimeInterval);
   }, []);
-  
-  const containerClasses = [
-    classes.WeatherClickTarget,
-    forecastEnable ? '' : classes.disabled,
-  ].join(' ');
 
   return (
     <header className={classes.Header}>
@@ -55,12 +48,7 @@ export const Header = ({ onWidgetClick, forecastEnable }: HeaderProps): JSX.Elem
       {!hideHeader && (
         <span className={classes.HeaderMain}>
           <h1>{greeting}</h1>
-          <div
-            onClick={forecastEnable ? onWidgetClick : undefined}
-            className={containerClasses}
-          >
-            <WeatherWidget />
-          </div>
+          <WeatherWidget onClick={onWidgetClick} />
         </span>
       )}
     </header>
