@@ -16,23 +16,17 @@ COPY client/package.json ./package.json
 RUN --mount=type=cache,target=/root/.npm \
     npm install --no-audit --no-fund
 
-# rollup native binary present ??
-# Alpine => musl
-#   _amd64  => @rollup/rollup-linux-x64-musl
-#   _arm64  => @rollup/rollup-linux-arm64-musl
+# Force esbuild and rollup to match the target architecture and version
 ARG TARGETARCH
 RUN set -eux; \
-  PKG_NAME=''; PKG_DIR=''; \
-  if [ "${TARGETARCH:-}" = "arm64" ]; then \
-    PKG_NAME='@rollup/rollup-linux-arm64-musl'; \
-    PKG_DIR='node_modules/@rollup/rollup-linux-arm64-musl'; \
-  elif [ "${TARGETARCH:-}" = "amd64" ]; then \
-    PKG_NAME='@rollup/rollup-linux-x64-musl'; \
-    PKG_DIR='node_modules/@rollup/rollup-linux-x64-musl'; \
-  fi; \
-  if [ -n "$PKG_NAME" ] && [ ! -f "$PKG_DIR/package.json" ]; then \
-    npm i -D "$PKG_NAME" --no-audit --no-fund; \
-  fi
+    if [ "${TARGETARCH}" = "arm64" ]; then \
+        npm install --prefer-offline --no-save "@esbuild/linux-arm64@0.25.9"; \
+    elif [ "${TARGETARCH}" = "amd64" ]; then \
+        npm install --prefer-offline --no-save "@esbuild/linux-x64@0.25.9"; \
+    fi
+
+# Verify the binary is working and version matches
+RUN ./node_modules/.bin/esbuild --version
 
 # --- Build Client
 COPY client/ ./

@@ -4,6 +4,7 @@
 
 This fork enhances the original with:
 - 🌦 **Dynamic Weather**: Automatically displays local weather based on the user's IP address, with smart caching to minimize API calls
+- 📈 **Weather Forecast**: Enable showing weather forecast for next X (configurable) days 
 - 🩺 **Advanced Health Checks**: A dedicated `/health` endpoint, perfect for Docker and external monitoring tools
 - 🪵 **Robust Logging**: Structured logs ready for integration e.g  **Vector, mtail, Prometheus, and Grafana**
 - 🗂️ **Application Categories**: Organize your applications into clean collapsible categories
@@ -70,6 +71,7 @@ services:
 - Weather is retrieved from [WeatherAPI.com](https://www.weatherapi.com/), using your API key.
 - Supports IP-based switching (e.g. VPN users will see weather for new IP automatically).
 - Want Flame to be like the original with specific lat/lon; support for this as well
+- Supports displaying weather forecast for next X (configurable) days *free weather API account supports only up to 3 days*
 
 ### 🔁 Caching Logic
 
@@ -125,6 +127,16 @@ Options include:
 
 Column appears in the weather widget if enabled.
 
+## 📈 Optional Weather Forecast
+![Untitled](https://github.com/user-attachments/assets/99bce3fa-183a-4615-a289-a3033aefced8)
+
+Flame now supports showing the weather forecast for the next X days (configurable), configurable in the UI under **Settings > Weather > Forecast**.
+
+### Enable via UI:
+- ✅ Toggle: "Enable weather forecast"
+- ✅ Set how many days of weather to display
+- ✅ 'Cached data' shows the weather based on saved data versus 'up to date' pulls the weather forecast on load
+     **Cached data is updated based on the docker compose environment variable 'WEATHER_CACHE_HOURS=6'
 
 ## ✅ Built-in Healthcheck
 
