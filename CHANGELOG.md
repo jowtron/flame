@@ -1,3 +1,12 @@
+### v2.4.3 (2025-12-20)
+- Updated axios 1.11.0 => 1.13.2
+- Updated dotenv 10.0.0 => 17.2.3
+- Updated express 4.17.1 => 5.2.1
+- Updated jsonwebtoken 9.0.2 => 9.0.3
+- Updated nodemon 3.1.10 => 3.1.11
+- Updated prettier 3.6.2 => 3.7.4
+- Updated react 19.1.1 => 19.2.3
+
 ### v2.4.2 (2025-09-15)
 - Updated prettier v2.4.1 => 3.6.2
 - Updated skycons-ts v0.2.0 => 1.0.0 (animated weather icons)
