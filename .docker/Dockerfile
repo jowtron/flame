@@ -20,9 +20,9 @@ RUN --mount=type=cache,target=/root/.npm \
 ARG TARGETARCH
 RUN set -eux; \
     if [ "${TARGETARCH}" = "arm64" ]; then \
-        npm install --prefer-offline --no-save "@esbuild/linux-arm64@0.25.9"; \
+        npm install --prefer-offline --no-save "@esbuild/linux-arm64@0.27.2"; \
     elif [ "${TARGETARCH}" = "amd64" ]; then \
-        npm install --prefer-offline --no-save "@esbuild/linux-x64@0.25.9"; \
+        npm install --prefer-offline --no-save "@esbuild/linux-x64@0.27.2"; \
     fi
 
 # Verify the binary is working and version matches
