@@ -24,7 +24,7 @@ export const BookmarkGrid = (props: Props): JSX.Element => {
   } = props;
 
   // Smaller icons on homepage
-  const iconSizePx = fromHomepage ? 18 : 32;
+  const iconSizePx = fromHomepage ? 18 : 22;
 
   let bookmarks: JSX.Element;
 
