@@ -16,7 +16,7 @@ const sequelize = new Sequelize({
 
 const umzug = new Umzug({
   migrations: {
-    glob: 'migrations/*.js',
+    glob: 'db/migrations/*.js',
     resolve: ({ name, path, context }) => {
       const migration = require(path);
       return {
