@@ -7,6 +7,7 @@ export interface NewApp {
   isPublic: boolean;
   description: string;
   invertIcon?: boolean;
+  faviconUrl?: string;
 }
 
 export interface App extends Model, NewApp {

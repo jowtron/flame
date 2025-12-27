@@ -7,6 +7,7 @@ export interface NewBookmark {
   icon: string;
   isPublic: boolean;
   invertIcon?: boolean;
+  faviconUrl?: string;
 }
 
 export interface Bookmark extends Model, NewBookmark {

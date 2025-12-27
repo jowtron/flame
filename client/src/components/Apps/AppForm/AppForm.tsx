@@ -4,7 +4,7 @@ import { NewApp } from '../../../interfaces';
 
 import classes from './AppForm.module.css';
 
-import { ModalForm, InputGroup, Button } from '../../UI';
+import { ModalForm, InputGroup, Button, FaviconSelector } from '../../UI';
 import { inputHandler, newAppTemplate } from '../../../utility';
 import { bindActionCreators } from 'redux';
 import { actionCreators } from '../../../store';
@@ -79,6 +79,9 @@ export const AppForm = ({ modalHandler }: Props): JSX.Element => {
       data.append('url', formData.url);
       data.append('isPublic', `${formData.isPublic ? 1 : 0}`);
       data.append('invertIcon', `${formData.invertIcon ? 1 : 0}`);
+      if (formData.faviconUrl) {
+        data.append('faviconUrl', formData.faviconUrl);
+      }
 
       return data;
     };
@@ -133,6 +136,23 @@ export const AppForm = ({ modalHandler }: Props): JSX.Element => {
           onChange={(e) => inputChangeHandler(e)}
         />
       </InputGroup>
+
+      {/* FAVICON SELECTOR */}
+      {formData.url && (
+        <InputGroup>
+          <label>Favicon</label>
+          <FaviconSelector
+            url={formData.url}
+            currentFaviconUrl={formData.faviconUrl}
+            onSelect={(faviconUrl) =>
+              setFormData({ ...formData, faviconUrl })
+            }
+          />
+          <span>
+            Optional - Select a specific favicon from the available options for this website.
+          </span>
+        </InputGroup>
+      )}
 
       {/* DESCRIPTION */}
       <InputGroup>

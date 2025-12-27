@@ -30,7 +30,7 @@ import { Bookmark, Category } from '../../../interfaces';
 // UI
 import { Message, Table } from '../../UI';
 import { TableActions } from '../../Actions/TableActions';
-import { bookmarkTemplate } from '../../../utility';
+import { bookmarkTemplate, getFaviconUrl, isImage, isSvg, isUrl } from '../../../utility';
 
 
 interface SortableBookmarkRowProps {
@@ -65,6 +65,58 @@ const SortableBookmarkRow = ({
     borderRadius: '4px',
   };
 
+  // Determine icon to display
+  const { icon } = bookmark;
+  const hasIcon = icon && icon.trim().length > 0;
+
+  const iconStyle = {
+    width: '24px',
+    height: '24px',
+    objectFit: 'contain' as const,
+    verticalAlign: 'middle' as const,
+    filter: bookmark.invertIcon ? 'invert(1)' : 'none',
+  };
+
+  let iconDisplay: JSX.Element;
+
+  if (hasIcon && (isImage(icon) || isSvg(icon))) {
+    // Custom uploaded image or SVG
+    const source = isUrl(icon) ? icon : `/uploads/${icon}`;
+    iconDisplay = (
+      <img
+        src={source}
+        alt={`${bookmark.name} icon`}
+        style={iconStyle}
+      />
+    );
+  } else if (bookmark.faviconUrl) {
+    // User-selected favicon
+    iconDisplay = (
+      <img
+        src={bookmark.faviconUrl}
+        alt={`${bookmark.name} icon`}
+        style={iconStyle}
+      />
+    );
+  } else if (hasIcon) {
+    // MDI icon name - just show text
+    iconDisplay = (
+      <span style={{ fontSize: '11px', opacity: 0.6 }}>
+        {icon}
+      </span>
+    );
+  } else {
+    // No icon - use auto-detected favicon
+    const autoFavicon = getFaviconUrl(bookmark.url);
+    iconDisplay = (
+      <img
+        src={autoFavicon}
+        alt={`${bookmark.name} icon`}
+        style={iconStyle}
+      />
+    );
+  }
+
   return (
     <tr ref={setNodeRef} style={style} {...attributes}>
       <td style={{ width: '50px', cursor: 'grab' }} {...listeners}>
@@ -72,7 +124,9 @@ const SortableBookmarkRow = ({
       </td>
       <td style={{ width: '200px' }}>{bookmark.name}</td>
       <td style={{ width: '200px' }}>{bookmark.url}</td>
-      <td style={{ width: '200px' }}>{bookmark.icon}</td>
+      <td style={{ width: '80px', textAlign: 'center' }}>
+        {iconDisplay}
+      </td>
       <td style={{ width: '200px' }}>
         {bookmark.isPublic ? 'Visible' : 'Hidden'}
       </td>

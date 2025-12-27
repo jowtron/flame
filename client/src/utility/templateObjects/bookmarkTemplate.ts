@@ -7,6 +7,7 @@ export const newBookmarkTemplate: NewBookmark = {
   icon: '',
   isPublic: true,
   invertIcon: false,
+  faviconUrl: '',
 };
 
 export const bookmarkTemplate: Bookmark = {

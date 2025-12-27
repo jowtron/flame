@@ -41,6 +41,11 @@ const App = sequelize.define(
       allowNull: false,
       defaultValue: false,
     },
+    faviconUrl: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      defaultValue: null,
+    },
   },
   {
     tableName: 'apps',

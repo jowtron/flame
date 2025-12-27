@@ -8,10 +8,15 @@ const router = express.Router();
 
 // Cache directory for favicons
 const FAVICON_CACHE_DIR = path.join(__dirname, '../data/favicon-cache');
+const USER_FAVICON_DIR = path.join(__dirname, '../data/user-favicons');
 
-// Ensure cache directory exists
+// Ensure cache directories exist
 if (!fs.existsSync(FAVICON_CACHE_DIR)) {
   fs.mkdirSync(FAVICON_CACHE_DIR, { recursive: true });
+}
+
+if (!fs.existsSync(USER_FAVICON_DIR)) {
+  fs.mkdirSync(USER_FAVICON_DIR, { recursive: true });
 }
 
 /**
@@ -273,6 +278,308 @@ router.get('/', async (req, res) => {
     console.error(`[Favicon] Error fetching favicon for ${domain}:`, err.message);
     return res.status(500).json({ error: 'Failed to fetch favicon' });
   }
+});
+
+/**
+ * Get image dimensions from a URL
+ */
+function getImageDimensions(imageUrl) {
+  try {
+    // Download to temp file and check dimensions
+    const tempFile = path.join(USER_FAVICON_DIR, `temp_${Date.now()}.tmp`);
+    execSync(`curl -L -s -m 5 -A "Mozilla/5.0" -o "${tempFile}" "${imageUrl}"`, {
+      stdio: 'pipe'
+    });
+
+    // Check if file exists and has content
+    if (!fs.existsSync(tempFile) || fs.statSync(tempFile).size === 0) {
+      return { width: null, height: null };
+    }
+
+    // Use sips (macOS) to get dimensions
+    const output = execSync(`sips -g pixelWidth -g pixelHeight "${tempFile}" 2>/dev/null`, {
+      stdio: 'pipe',
+      encoding: 'utf-8'
+    });
+
+    // Clean up temp file
+    fs.unlinkSync(tempFile);
+
+    // Parse output (format: "pixelWidth: 180\n  pixelHeight: 180")
+    const widthMatch = output.match(/pixelWidth:\s*(\d+)/);
+    const heightMatch = output.match(/pixelHeight:\s*(\d+)/);
+
+    if (widthMatch && heightMatch) {
+      return {
+        width: parseInt(widthMatch[1]),
+        height: parseInt(heightMatch[1])
+      };
+    }
+  } catch (err) {
+    // Couldn't get dimensions, clean up if file exists
+    const tempFile = path.join(USER_FAVICON_DIR, `temp_${Date.now()}.tmp`);
+    if (fs.existsSync(tempFile)) {
+      try {
+        fs.unlinkSync(tempFile);
+      } catch (e) {
+        // Ignore cleanup errors
+      }
+    }
+  }
+  return { width: null, height: null };
+}
+
+/**
+ * Find ALL available favicons for a domain
+ */
+async function findAllFavicons(domain, isLocal) {
+  const protocol = isLocal ? 'http' : 'https';
+  const foundFavicons = [];
+
+  // Try common paths
+  const commonPaths = [
+    { path: '/favicon.svg', type: 'svg', name: 'SVG Favicon' },
+    { path: '/favicon.png', type: 'png', name: 'PNG Favicon' },
+    { path: '/apple-touch-icon.png', type: 'apple-touch-icon', name: 'Apple Touch Icon' },
+    { path: '/apple-touch-icon-180x180.png', type: 'apple-touch-icon-180', name: 'Apple Touch Icon 180x180' },
+    { path: '/apple-touch-icon-152x152.png', type: 'apple-touch-icon-152', name: 'Apple Touch Icon 152x152' },
+    { path: '/apple-touch-icon-120x120.png', type: 'apple-touch-icon-120', name: 'Apple Touch Icon 120x120' },
+    { path: '/apple-touch-icon-precomposed.png', type: 'apple-touch-precomposed', name: 'Apple Touch Icon (Precomposed)' },
+    { path: '/favicon.ico', type: 'ico', name: 'ICO Favicon' },
+  ];
+
+  for (const { path, type, name } of commonPaths) {
+    const faviconUrl = `${protocol}://${domain}${path}`;
+    try {
+      const output = execSync(`curl -I -L -s -m 3 -A "Mozilla/5.0" -H "Accept: image/svg+xml,image/png,image/x-icon,image/*,*/*" "${faviconUrl}"`, {
+        stdio: 'pipe',
+        encoding: 'utf-8'
+      });
+
+      if (/HTTP\/[12](?:\.\d)?\s+200/i.test(output)) {
+        // Extract content-length if available
+        const sizeMatch = output.match(/content-length:\s*(\d+)/i);
+        const size = sizeMatch ? parseInt(sizeMatch[1]) : null;
+
+        // Extract content-type
+        const typeMatch = output.match(/content-type:\s*([^\r\n]+)/i);
+        const mimeType = typeMatch ? typeMatch[1].trim() : null;
+
+        // Get image dimensions
+        const { width, height } = getImageDimensions(faviconUrl);
+
+        foundFavicons.push({
+          url: faviconUrl,
+          type,
+          name,
+          size,
+          mimeType,
+          width,
+          height
+        });
+      }
+    } catch (err) {
+      // Continue to next path
+    }
+  }
+
+  // Try HTML parsing for additional icons
+  try {
+    const htmlUrl = `${protocol}://${domain}/`;
+    const html = execSync(`curl -L -s -m 5 -A "Mozilla/5.0" "${htmlUrl}"`, {
+      stdio: 'pipe',
+      encoding: 'utf-8',
+      maxBuffer: 1024 * 1024
+    });
+
+    const patterns = [
+      { regex: /<link[^>]*rel=["']icon["'][^>]*href=["']([^"']+)["'][^>]*>/gi, type: 'icon' },
+      { regex: /<link[^>]*href=["']([^"']+)["'][^>]*rel=["']icon["'][^>]*>/gi, type: 'icon' },
+      { regex: /<link[^>]*rel=["']shortcut icon["'][^>]*href=["']([^"']+)["'][^>]*>/gi, type: 'shortcut-icon' },
+      { regex: /<link[^>]*href=["']([^"']+)["'][^>]*rel=["']shortcut icon["'][^>]*>/gi, type: 'shortcut-icon' },
+      { regex: /<link[^>]*rel=["']apple-touch-icon["'][^>]*href=["']([^"']+)["'][^>]*>/gi, type: 'apple-touch-icon-html' },
+      { regex: /<link[^>]*href=["']([^"']+)["'][^>]*rel=["']apple-touch-icon["'][^>]*>/gi, type: 'apple-touch-icon-html' },
+    ];
+
+    for (const { regex, type } of patterns) {
+      const matches = html.matchAll(regex);
+      for (const match of matches) {
+        if (match && match[1]) {
+          let iconUrl = match[1];
+          if (!iconUrl.startsWith('http')) {
+            try {
+              iconUrl = new URL(iconUrl, htmlUrl).href;
+            } catch (e) {
+              continue;
+            }
+          }
+
+          // Check if already found from common paths
+          if (foundFavicons.some(f => f.url === iconUrl)) {
+            continue;
+          }
+
+          // Verify it's accessible
+          try {
+            const output = execSync(`curl -I -L -s -m 3 -A "Mozilla/5.0" -H "Accept: image/svg+xml,image/png,image/x-icon,image/*,*/*" "${iconUrl}"`, {
+              stdio: 'pipe',
+              encoding: 'utf-8'
+            });
+
+            if (/HTTP\/[12](?:\.\d)?\s+200/i.test(output)) {
+              const sizeMatch = output.match(/content-length:\s*(\d+)/i);
+              const size = sizeMatch ? parseInt(sizeMatch[1]) : null;
+
+              const typeMatch = output.match(/content-type:\s*([^\r\n]+)/i);
+              const mimeType = typeMatch ? typeMatch[1].trim() : null;
+
+              // Get image dimensions
+              const { width, height } = getImageDimensions(iconUrl);
+
+              foundFavicons.push({
+                url: iconUrl,
+                type,
+                name: type === 'icon' ? 'Icon (from HTML)' :
+                      type === 'shortcut-icon' ? 'Shortcut Icon (from HTML)' :
+                      'Apple Touch Icon (from HTML)',
+                size,
+                mimeType,
+                width,
+                height
+              });
+            }
+          } catch (err) {
+            // Skip this icon
+          }
+        }
+      }
+    }
+  } catch (htmlErr) {
+    // HTML parsing failed, that's okay
+  }
+
+  return foundFavicons;
+}
+
+/**
+ * GET /api/favicon/all?url=<url>
+ * Returns all available favicons for a given URL
+ */
+router.get('/all', async (req, res) => {
+  const { url } = req.query;
+
+  if (!url) {
+    return res.status(400).json({ error: 'URL parameter required' });
+  }
+
+  const domain = extractDomain(url);
+  if (!domain) {
+    return res.status(400).json({ error: 'Invalid URL' });
+  }
+
+  try {
+    const isLocal = isLocalIP(domain);
+    const favicons = await findAllFavicons(domain, isLocal);
+
+    return res.json({
+      domain,
+      isLocal,
+      favicons
+    });
+  } catch (err) {
+    console.error(`[Favicon] Error finding all favicons for ${domain}:`, err.message);
+    return res.status(500).json({ error: 'Failed to find favicons' });
+  }
+});
+
+/**
+ * POST /api/favicon/save
+ * Downloads and permanently stores a user-selected favicon
+ * Body: { faviconUrl: string }
+ * Returns: { path: string } - the local path to serve the favicon
+ */
+router.post('/save', async (req, res) => {
+  const { faviconUrl } = req.body;
+
+  if (!faviconUrl) {
+    return res.status(400).json({ error: 'faviconUrl parameter required' });
+  }
+
+  try {
+    // Create a unique filename based on the URL hash
+    const hash = crypto.createHash('md5').update(faviconUrl).digest('hex');
+    const tempFile = path.join(USER_FAVICON_DIR, `${hash}.tmp`);
+
+    // Download the favicon
+    execSync(`curl -L -s -m 10 -A "Mozilla/5.0" -H "Accept: image/svg+xml,image/png,image/x-icon,image/*,*/*" -o "${tempFile}" "${faviconUrl}"`, {
+      stdio: 'pipe'
+    });
+
+    // Verify it was downloaded and get MIME type
+    if (!fs.existsSync(tempFile)) {
+      return res.status(500).json({ error: 'Failed to download favicon' });
+    }
+
+    const stats = fs.statSync(tempFile);
+    if (stats.size === 0) {
+      fs.unlinkSync(tempFile);
+      return res.status(500).json({ error: 'Downloaded file is empty' });
+    }
+
+    // Detect MIME type
+    const fileTypeOutput = execSync(`file -b --mime-type "${tempFile}"`, {
+      stdio: 'pipe',
+      encoding: 'utf-8'
+    }).trim();
+
+    if (!fileTypeOutput.startsWith('image/')) {
+      fs.unlinkSync(tempFile);
+      return res.status(500).json({ error: 'Downloaded file is not an image' });
+    }
+
+    // Determine extension from MIME type
+    const mimeToExt = {
+      'image/svg+xml': 'svg',
+      'image/png': 'png',
+      'image/x-icon': 'ico',
+      'image/vnd.microsoft.icon': 'ico',
+      'image/jpeg': 'jpg',
+      'image/gif': 'gif',
+      'image/webp': 'webp'
+    };
+
+    const ext = mimeToExt[fileTypeOutput] || 'png';
+    const finalFile = path.join(USER_FAVICON_DIR, `${hash}.${ext}`);
+
+    // Rename temp file to final filename
+    fs.renameSync(tempFile, finalFile);
+
+    // Return the path relative to /api/favicon/serve/
+    return res.json({
+      path: `/api/favicon/serve/${hash}.${ext}`
+    });
+  } catch (err) {
+    console.error(`[Favicon] Error saving favicon:`, err.message);
+    return res.status(500).json({ error: 'Failed to save favicon' });
+  }
+});
+
+/**
+ * GET /api/favicon/serve/:filename
+ * Serves a user-selected favicon from permanent storage
+ */
+router.get('/serve/:filename', (req, res) => {
+  const { filename } = req.params;
+
+  // Sanitize filename to prevent directory traversal
+  const sanitized = path.basename(filename);
+  const filePath = path.join(USER_FAVICON_DIR, sanitized);
+
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ error: 'Favicon not found' });
+  }
+
+  return res.sendFile(filePath);
 });
 
 module.exports = router;

@@ -7,6 +7,7 @@ export const newAppTemplate: NewApp = {
   isPublic: true,
   description: '',
   invertIcon: false,
+  faviconUrl: '',
 };
 
 export const appTemplate: App = {

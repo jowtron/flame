@@ -1,0 +1,204 @@
+.FaviconSelector {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0;
+}
+
+.SelectButton {
+  background-color: var(--color-primary);
+  color: var(--color-background);
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: opacity 0.2s;
+}
+
+.SelectButton:hover {
+  opacity: 0.8;
+}
+
+.CurrentFavicon img {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+
+.Modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.ModalContent {
+  background: var(--color-background);
+  border-radius: 8px;
+  padding: 20px;
+  max-width: 600px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.ModalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--color-primary);
+  padding-bottom: 10px;
+}
+
+.ModalHeader h3 {
+  margin: 0;
+  color: var(--color-primary);
+}
+
+.CloseButton {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: var(--color-primary);
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.CloseButton:hover {
+  opacity: 0.7;
+}
+
+.ModalBody {
+  min-height: 200px;
+}
+
+.FaviconGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 15px;
+  margin: 20px 0;
+}
+
+.FaviconOption {
+  border: 2px solid var(--color-primary-lighter);
+  border-radius: 8px;
+  padding: 15px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  transition: all 0.2s;
+  position: relative;
+}
+
+.FaviconOption:hover {
+  border-color: var(--color-primary);
+  background-color: var(--color-background-darker);
+  transform: scale(1.02);
+}
+
+.FaviconOption.Selected {
+  border-color: var(--color-primary);
+  border-width: 3px;
+  background-color: var(--color-primary);
+  box-shadow: 0 0 0 4px rgba(var(--color-primary-rgb), 0.3);
+  transform: scale(1.05);
+}
+
+.FaviconOption.Selected::before {
+  content: '✓';
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: var(--color-background);
+  color: var(--color-primary);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 16px;
+}
+
+.FaviconOption.Selected .FaviconInfo strong,
+.FaviconOption.Selected .FaviconInfo small {
+  color: var(--color-background);
+}
+
+.FaviconOption img {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+}
+
+.FaviconInfo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
+}
+
+.FaviconInfo strong {
+  font-size: 12px;
+  color: var(--color-primary);
+}
+
+.FaviconInfo small {
+  font-size: 10px;
+  color: var(--color-text-secondary);
+}
+
+.ModalFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--color-primary);
+}
+
+.FooterButton {
+  background-color: var(--color-primary);
+  color: var(--color-background);
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: opacity 0.2s;
+}
+
+.FooterButton:hover:not(:disabled) {
+  opacity: 0.8;
+}
+
+.FooterButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.Error {
+  color: #ff6b6b;
+  padding: 10px;
+  text-align: center;
+  background: rgba(255, 107, 107, 0.1);
+  border-radius: 4px;
+}

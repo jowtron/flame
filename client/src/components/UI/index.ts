@@ -15,3 +15,4 @@ export * from './Forms/ModalForm/ModalForm';
 export * from './Buttons/ActionButton/ActionButton';
 export * from './Buttons/Button/Button';
 export * from './Text/Message/Message';
+export * from './FaviconSelector/FaviconSelector';

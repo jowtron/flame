@@ -44,8 +44,8 @@ export const AppCard = ({ app }: Props): JSX.Element => {
   } else if (hasIcon) {
     iconEl = <Icon icon={iconParser(icon)} />;
   } else {
-    // No icon set - use favicon from the app's URL
-    const faviconUrl = getFaviconUrl(app.url);
+    // Use custom favicon if selected, otherwise auto-detect
+    const faviconUrl = app.faviconUrl || getFaviconUrl(app.url);
     iconEl = (
       <img
         src={faviconUrl}

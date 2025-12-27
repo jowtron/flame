@@ -10,7 +10,7 @@ import { actionCreators } from '../../../store';
 import { Bookmark, Category, NewBookmark } from '../../../interfaces';
 
 // UI
-import { ModalForm, InputGroup, Button } from '../../UI';
+import { ModalForm, InputGroup, Button, FaviconSelector } from '../../UI';
 
 // CSS
 import classes from './Form.module.css';
@@ -90,6 +90,9 @@ export const BookmarksForm = ({
       data.append('categoryId', `${formData.categoryId}`);
       data.append('isPublic', `${formData.isPublic ? 1 : 0}`);
       data.append('invertIcon', `${formData.invertIcon ? 1 : 0}`);
+      if (formData.faviconUrl) {
+        data.append('faviconUrl', formData.faviconUrl);
+      }
 
       return data;
     };
@@ -184,6 +187,23 @@ export const BookmarksForm = ({
           onChange={(e) => inputChangeHandler(e)}
         />
       </InputGroup>
+
+      {/* FAVICON SELECTOR */}
+      {formData.url && (
+        <InputGroup>
+          <label>Favicon</label>
+          <FaviconSelector
+            url={formData.url}
+            currentFaviconUrl={formData.faviconUrl}
+            onSelect={(faviconUrl) =>
+              setFormData({ ...formData, faviconUrl })
+            }
+          />
+          <span>
+            Optional - Select a specific favicon from the available options for this website.
+          </span>
+        </InputGroup>
+      )}
 
       {/* CATEGORY */}
       <InputGroup>

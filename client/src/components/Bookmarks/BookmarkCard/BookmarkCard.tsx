@@ -93,8 +93,8 @@ export const BookmarkCard = (props: Props): JSX.Element => {
               </div>
             );
           } else {
-            // No icon set - use favicon from the bookmark's URL
-            const faviconUrl = getFaviconUrl(bookmark.url);
+            // Use custom favicon if selected, otherwise auto-detect
+            const faviconUrl = bookmark.faviconUrl || getFaviconUrl(bookmark.url);
             iconEl = (
               <div
                 className={classes.BookmarkIcon}
