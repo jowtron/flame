@@ -58,11 +58,16 @@ async function tryFetchFavicon(domain, isLocal) {
   for (const faviconPath of commonPaths) {
     const faviconUrl = `${protocol}://${domain}${faviconPath}`;
     try {
-      // Use curl to check if URL is accessible
-      execSync(`curl -I -L -s -m 3 -A "Mozilla/5.0" "${faviconUrl}"`, {
-        stdio: 'pipe'
+      // Use curl to check if URL returns 200 OK
+      const output = execSync(`curl -I -L -s -m 3 -A "Mozilla/5.0" "${faviconUrl}"`, {
+        stdio: 'pipe',
+        encoding: 'utf-8'
       });
-      return faviconUrl;
+
+      // Check if response contains HTTP 200 status
+      if (/HTTP\/[12](?:\.\d)?\s+200/i.test(output)) {
+        return faviconUrl;
+      }
     } catch (err) {
       // Continue to next path
     }
