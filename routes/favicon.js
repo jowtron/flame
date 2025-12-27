@@ -44,10 +44,15 @@ function extractDomain(url) {
  */
 async function tryFetchFavicon(domain, isLocal) {
   const protocol = isLocal ? 'http' : 'https';
+  // Try formats in priority order: SVG (best quality) > PNG > ICO
   const commonPaths = [
-    '/favicon.ico',
+    '/favicon.svg',
+    '/favicon.png',
     '/apple-touch-icon.png',
+    '/apple-touch-icon-180x180.png',
+    '/apple-touch-icon-152x152.png',
     '/apple-touch-icon-precomposed.png',
+    '/favicon.ico',
   ];
 
   for (const faviconPath of commonPaths) {
