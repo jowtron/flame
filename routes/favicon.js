@@ -59,7 +59,8 @@ async function tryFetchFavicon(domain, isLocal) {
     const faviconUrl = `${protocol}://${domain}${faviconPath}`;
     try {
       // Use curl to check if URL returns 200 OK
-      const output = execSync(`curl -I -L -s -m 3 -A "Mozilla/5.0" "${faviconUrl}"`, {
+      // Include Accept header for SVG to avoid 406 responses
+      const output = execSync(`curl -I -L -s -m 3 -A "Mozilla/5.0" -H "Accept: image/svg+xml,image/png,image/x-icon,image/*,*/*" "${faviconUrl}"`, {
         stdio: 'pipe',
         encoding: 'utf-8'
       });
@@ -78,11 +79,11 @@ async function tryFetchFavicon(domain, isLocal) {
 }
 
 /**
- * Download favicon using curl
+ * Download favicon using curl and return the MIME type
  */
 function downloadFavicon(faviconUrl, outputPath) {
   try {
-    execSync(`curl -L -s -m 10 -A "Mozilla/5.0" -o "${outputPath}" "${faviconUrl}"`, {
+    execSync(`curl -L -s -m 10 -A "Mozilla/5.0" -H "Accept: image/svg+xml,image/png,image/x-icon,image/*,*/*" -o "${outputPath}" "${faviconUrl}"`, {
       stdio: 'pipe'
     });
 
@@ -99,7 +100,7 @@ function downloadFavicon(faviconUrl, outputPath) {
 
           // Check if it's an image MIME type
           if (fileTypeOutput.startsWith('image/')) {
-            return true;
+            return fileTypeOutput; // Return MIME type instead of true
           }
         } catch (err) {
           // file command failed, clean up and return false
@@ -114,6 +115,22 @@ function downloadFavicon(faviconUrl, outputPath) {
     }
     return false;
   }
+}
+
+/**
+ * Map MIME type to file extension
+ */
+function mimeToExtension(mimeType) {
+  const mimeMap = {
+    'image/svg+xml': 'svg',
+    'image/png': 'png',
+    'image/x-icon': 'ico',
+    'image/vnd.microsoft.icon': 'ico',
+    'image/jpeg': 'jpg',
+    'image/gif': 'gif',
+    'image/webp': 'webp'
+  };
+  return mimeMap[mimeType] || 'ico';
 }
 
 /**
@@ -132,19 +149,25 @@ router.get('/', async (req, res) => {
     return res.status(400).json({ error: 'Invalid URL' });
   }
 
-  // Create cache filename from domain hash
+  // Create cache filename from domain hash (extension will be added after download)
   const hash = crypto.createHash('md5').update(domain).digest('hex');
-  const cacheFile = path.join(FAVICON_CACHE_DIR, `${hash}.ico`);
+  const cacheFileBase = path.join(FAVICON_CACHE_DIR, hash);
 
-  // Check cache first
-  if (fs.existsSync(cacheFile)) {
-    const stats = fs.statSync(cacheFile);
-    // Serve from cache if less than 7 days old
-    const age = Date.now() - stats.mtimeMs;
-    const maxAge = 7 * 24 * 60 * 60 * 1000; // 7 days
+  // Check cache first - look for any extension
+  const possibleExtensions = ['svg', 'png', 'ico', 'jpg', 'webp'];
+  for (const ext of possibleExtensions) {
+    const cacheFile = `${cacheFileBase}.${ext}`;
+    if (fs.existsSync(cacheFile)) {
+      const stats = fs.statSync(cacheFile);
+      // Serve from cache if less than 7 days old
+      const age = Date.now() - stats.mtimeMs;
+      const maxAge = 7 * 24 * 60 * 60 * 1000; // 7 days
 
-    if (age < maxAge) {
-      return res.sendFile(cacheFile);
+      if (age < maxAge) {
+        return res.sendFile(cacheFile);
+      }
+      // Cache expired, delete it
+      fs.unlinkSync(cacheFile);
     }
   }
 
@@ -153,14 +176,27 @@ router.get('/', async (req, res) => {
     const isLocal = isLocalIP(domain);
     const faviconUrl = await tryFetchFavicon(domain, isLocal);
 
-    if (downloadFavicon(faviconUrl, cacheFile)) {
+    // Download to temp file first
+    const tempFile = `${cacheFileBase}.tmp`;
+    const mimeType = downloadFavicon(faviconUrl, tempFile);
+
+    if (mimeType) {
+      // Rename to correct extension based on MIME type
+      const ext = mimeToExtension(mimeType);
+      const cacheFile = `${cacheFileBase}.${ext}`;
+      fs.renameSync(tempFile, cacheFile);
       return res.sendFile(cacheFile);
     }
 
     // If direct fetch failed, try Google's service (but only for public IPs)
     if (!isLocal) {
       const googleUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
-      if (downloadFavicon(googleUrl, cacheFile)) {
+      const googleMimeType = downloadFavicon(googleUrl, tempFile);
+
+      if (googleMimeType) {
+        const ext = mimeToExtension(googleMimeType);
+        const cacheFile = `${cacheFileBase}.${ext}`;
+        fs.renameSync(tempFile, cacheFile);
         return res.sendFile(cacheFile);
       }
     }
