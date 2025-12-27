@@ -29,7 +29,7 @@ WORKDIR /app
 COPY --from=builder /app /app
 
 # runtime OS deps
-RUN apk add --no-cache curl jq sqlite
+RUN apk add --no-cache curl jq sqlite file
 
 ENV NODE_ENV=production
 
