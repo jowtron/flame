@@ -15,15 +15,23 @@ if (!fs.existsSync(FAVICON_CACHE_DIR)) {
 }
 
 /**
- * Check if a hostname is a local/private IP address
+ * Check if a hostname is a local/private IP address or hostname
  */
 function isLocalIP(hostname) {
+  // Remove port if present
+  const host = hostname.split(':')[0];
+
   return (
-    hostname === 'localhost' ||
-    hostname === '127.0.0.1' ||
-    hostname.startsWith('192.168.') ||
-    hostname.startsWith('10.') ||
-    /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname)
+    host === 'localhost' ||
+    host === '127.0.0.1' ||
+    host.startsWith('192.168.') ||
+    host.startsWith('10.') ||
+    /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(host) ||
+    host.endsWith('.local') ||
+    // Hostname without dots (like "ts-453be", "nas", "router")
+    !host.includes('.') ||
+    // Common development ports typically indicate local services
+    (hostname.includes(':') && /:(3000|5000|5173|8000|8080|8443|9000)$/.test(hostname))
   );
 }
 
