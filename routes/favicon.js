@@ -74,6 +74,64 @@ async function tryFetchFavicon(domain, isLocal) {
     }
   }
 
+  // If common paths fail, try parsing HTML for icon metadata
+  try {
+    const htmlUrl = `${protocol}://${domain}/`;
+    const html = execSync(`curl -L -s -m 5 -A "Mozilla/5.0" "${htmlUrl}"`, {
+      stdio: 'pipe',
+      encoding: 'utf-8',
+      maxBuffer: 1024 * 1024 // 1MB max
+    });
+
+    // Look for favicon in link tags - prioritize by type
+    const patterns = [
+      { regex: /<link[^>]*rel=["']icon["'][^>]*href=["']([^"']+)["'][^>]*>/gi, priority: 1 },
+      { regex: /<link[^>]*href=["']([^"']+)["'][^>]*rel=["']icon["'][^>]*>/gi, priority: 1 },
+      { regex: /<link[^>]*rel=["']shortcut icon["'][^>]*href=["']([^"']+)["'][^>]*>/gi, priority: 2 },
+      { regex: /<link[^>]*href=["']([^"']+)["'][^>]*rel=["']shortcut icon["'][^>]*>/gi, priority: 2 },
+      { regex: /<link[^>]*rel=["']apple-touch-icon["'][^>]*href=["']([^"']+)["'][^>]*>/gi, priority: 3 },
+      { regex: /<link[^>]*href=["']([^"']+)["'][^>]*rel=["']apple-touch-icon["'][^>]*>/gi, priority: 3 },
+    ];
+
+    const foundIcons = [];
+    for (const { regex, priority } of patterns) {
+      const matches = html.matchAll(regex);
+      for (const match of matches) {
+        if (match && match[1]) {
+          let iconUrl = match[1];
+          // Resolve relative URLs
+          if (!iconUrl.startsWith('http')) {
+            try {
+              iconUrl = new URL(iconUrl, htmlUrl).href;
+            } catch (e) {
+              continue;
+            }
+          }
+          foundIcons.push({ url: iconUrl, priority });
+        }
+      }
+    }
+
+    // Sort by priority and return first valid icon
+    foundIcons.sort((a, b) => a.priority - b.priority);
+    for (const { url } of foundIcons) {
+      try {
+        // Verify the icon URL is accessible
+        const output = execSync(`curl -I -L -s -m 3 -A "Mozilla/5.0" -H "Accept: image/svg+xml,image/png,image/x-icon,image/*,*/*" "${url}"`, {
+          stdio: 'pipe',
+          encoding: 'utf-8'
+        });
+        if (/HTTP\/[12](?:\.\d)?\s+200/i.test(output)) {
+          return url;
+        }
+      } catch (err) {
+        // Continue to next icon
+      }
+    }
+  } catch (htmlErr) {
+    // HTML parsing failed, continue to fallback
+  }
+
   // Fallback
   return `${protocol}://${domain}/favicon.ico`;
 }
