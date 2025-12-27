@@ -147,10 +147,12 @@ router.get('/', async (req, res) => {
       return res.sendFile(cacheFile);
     }
 
-    // If direct fetch failed, try Google's service
-    const googleUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
-    if (downloadFavicon(googleUrl, cacheFile)) {
-      return res.sendFile(cacheFile);
+    // If direct fetch failed, try Google's service (but only for public IPs)
+    if (!isLocal) {
+      const googleUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+      if (downloadFavicon(googleUrl, cacheFile)) {
+        return res.sendFile(cacheFile);
+      }
     }
 
     // All methods failed
