@@ -1,6 +1,8 @@
 node_modules
 data
 public
-!client/public.env
+!client/public
+client/dist
+.env
 .DS_Store
 QNAP-SSH-GUIDE.md
