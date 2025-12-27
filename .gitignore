@@ -3,3 +3,4 @@ data
 public
 !client/public.env
 .DS_Store
+QNAP-SSH-GUIDE.md
