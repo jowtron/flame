@@ -84,12 +84,61 @@ export const WeatherSettings = (): JSX.Element => {
 
   // Get user location
   const getLocation = () => {
+    if (!window.navigator.geolocation) {
+      createNotification({
+        title: 'Error',
+        message: 'Geolocation is not supported by your browser',
+      });
+      return;
+    }
+
+    // Check if using HTTPS or localhost (required for Safari and modern browsers)
+    const isSecureContext = window.isSecureContext;
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+    if (!isSecureContext && !isLocalhost) {
+      createNotification({
+        title: 'Error',
+        message: 'Geolocation requires HTTPS or localhost. Access Flame via https:// or use localhost instead of IP address.',
+      });
+      return;
+    }
+
+    createNotification({
+      title: 'Info',
+      message: 'Requesting location permission...',
+    });
+
     window.navigator.geolocation.getCurrentPosition(
       ({ coords: { latitude, longitude } }) => {
         setFormData({
           ...formData,
           lat: latitude,
           long: longitude,
+        });
+        createNotification({
+          title: 'Success',
+          message: `Location set to ${latitude.toFixed(2)}, ${longitude.toFixed(2)}`,
+        });
+      },
+      (error) => {
+        let message = 'Failed to get location';
+
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            message = 'Location permission denied. Please enable location access in your browser settings.';
+            break;
+          case error.POSITION_UNAVAILABLE:
+            message = 'Location information is unavailable';
+            break;
+          case error.TIMEOUT:
+            message = 'Location request timed out';
+            break;
+        }
+
+        createNotification({
+          title: 'Error',
+          message,
         });
       }
     );
@@ -133,8 +182,10 @@ export const WeatherSettings = (): JSX.Element => {
           step="any"
           lang="en-150"
         />
-        <span onClick={getLocation}>
-          <a href="#">Click to get current location</a>
+        <span>
+          <a href="#" onClick={(e) => { e.preventDefault(); getLocation(); }}>
+            Click to get current location
+          </a>
         </span>
       </InputGroup>
 
