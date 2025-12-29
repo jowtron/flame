@@ -53,7 +53,7 @@ export const BookmarkCard = (props: Props): JSX.Element => {
           const { icon, name } = bookmark;
           const hasIcon = icon && icon.trim().length > 0;
 
-          if (hasIcon && isImage(icon)) {
+          if (hasIcon && (isImage(icon) || isSvg(icon))) {
             const source = isUrl(icon) ? icon : `/uploads/${icon}`;
 
             iconEl = (
@@ -66,21 +66,6 @@ export const BookmarkCard = (props: Props): JSX.Element => {
                   alt={`${name} icon`}
                   className={classes.CustomIcon}
                 />
-              </div>
-            );
-          } else if (hasIcon && isSvg(icon)) {
-            const source = isUrl(icon) ? icon : `/uploads/${icon}`;
-
-            iconEl = (
-              <div
-                className={classes.BookmarkIcon}
-                style={bookmark.invertIcon ? { filter: 'invert(1)' } : {}}
-              >
-                <svg
-                  data-src={source}
-                  fill="var(--color-primary)"
-                  className={classes.BookmarkIconSvg}
-                ></svg>
               </div>
             );
           } else if (hasIcon) {
