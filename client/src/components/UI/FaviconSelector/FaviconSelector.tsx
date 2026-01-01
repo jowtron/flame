@@ -164,7 +164,7 @@ export const FaviconSelector = ({
                       onClick={() => handleSelect(favicon.url)}
                     >
                       <img
-                        src={favicon.url}
+                        src={`/api/favicon/proxy?url=${encodeURIComponent(favicon.url)}`}
                         alt={favicon.name}
                         onError={(e) => {
                           (e.target as HTMLImageElement).style.display = 'none';

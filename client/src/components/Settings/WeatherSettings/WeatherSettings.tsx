@@ -96,10 +96,17 @@ export const WeatherSettings = (): JSX.Element => {
     const isSecureContext = window.isSecureContext;
     const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
+    console.log('Geolocation debug:', {
+      isSecureContext,
+      isLocalhost,
+      hostname: window.location.hostname,
+      protocol: window.location.protocol,
+    });
+
     if (!isSecureContext && !isLocalhost) {
       createNotification({
         title: 'Error',
-        message: 'Geolocation requires HTTPS or localhost. Access Flame via https:// or use localhost instead of IP address.',
+        message: `Geolocation requires HTTPS. Current: ${window.location.protocol}//${window.location.hostname}`,
       });
       return;
     }
@@ -124,9 +131,11 @@ export const WeatherSettings = (): JSX.Element => {
       (error) => {
         let message = 'Failed to get location';
 
+        console.error('Geolocation error:', error);
+
         switch (error.code) {
           case error.PERMISSION_DENIED:
-            message = 'Location permission denied. Please enable location access in your browser settings.';
+            message = 'Location permission denied. In Safari: Settings → Websites → Location → change this site to "Ask" or "Allow"';
             break;
           case error.POSITION_UNAVAILABLE:
             message = 'Location information is unavailable';
